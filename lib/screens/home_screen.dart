@@ -7,6 +7,7 @@ import '../utils/colors.dart';
 import '../widgets/action_icon.dart';
 import '../widgets/section_header.dart';
 import 'transfer/contact_selection_screen.dart';
+import 'transfer/recent_contacts_widget.dart';
 import '../providers/user_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
@@ -28,6 +29,14 @@ class HomeScreen extends StatelessWidget {
             _buildMoneyTransferSection(context),
             _buildUPIIdSection(context),
             const SizedBox(height: 10),
+            // Recent Contacts Section
+            Consumer<UserProvider>(
+              builder: (context, userProvider, child) {
+                return RecentContactsSection(
+                  transactions: userProvider.transactions,
+                );
+              },
+            ),
             _buildRechargeSection(),
             const SizedBox(height: 10),
             _buildSponsoredLinks(),

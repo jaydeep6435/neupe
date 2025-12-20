@@ -96,19 +96,25 @@ class SupabaseService {
     String? loginMobile,
   }) async {
     try {
-      final data = await _client
-          .from('app_users')
-          .select('name, mobile, upi_id')
-          .eq('id', userId)
-          .maybeSingle();
+      final data = await _client.from('app_users').select('mobile, upi_id').eq('id', userId).maybeSingle();
+      // Also fetch the profiles row (may contain full name or display name)
+      final profile = await _client.from('profiles').select('*').eq('id', userId).maybeSingle();
 
       // Prefer the mobile number the user just logged in with, if available.
       final dynamic rawMobileFromDb = data?['mobile'];
-      final dbMobile =
-          rawMobileFromDb == null ? '' : rawMobileFromDb.toString();
+      final dbMobile = rawMobileFromDb == null ? '' : rawMobileFromDb.toString();
       final mobile =
           (loginMobile != null && loginMobile.isNotEmpty) ? loginMobile : dbMobile;
-      final name = (data?['name'] ?? '') as String;
+      // Determine a reasonable display name from profiles or app_users if available
+      String name = '';
+      if (profile != null) {
+        name = (profile['full_name'] ?? profile['name'] ?? profile['display_name'] ?? '') as String;
+      }
+      // fallback to app_users 'name' if it ever exists
+      if (name.isEmpty) {
+        name = (data?['name'] ?? '') as String;
+      }
+
       var upiId = (data?['upi_id'] ?? '') as String;
 
       const suffix = '@axl';
