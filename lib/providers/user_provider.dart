@@ -5,32 +5,47 @@ import '../services/supabase_service.dart';
 
 class UserProvider with ChangeNotifier {
   final SupabaseService _supabaseService = SupabaseService();
-  // Hardcoded User ID for demo purposes
-  final String _userId = 'user_123'; 
+  final String _userId;
   
-  double _walletBalance = 500.0;
+  final double _walletBalance = 500.0;
   double _bankBalance = 0.0;
   List<TransactionModel> _transactions = [];
   bool _isLoading = true;
+  String? _errorMessage;
 
   double get walletBalance => _walletBalance;
   double get bankBalance => _bankBalance;
   List<TransactionModel> get transactions => List.unmodifiable(_transactions);
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
-  UserProvider() {
+  UserProvider(this._userId) {
     _loadData();
   }
 
   Future<void> _loadData() async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
-    _bankBalance = await _supabaseService.getBalance(_userId);
-    _transactions = await _supabaseService.getTransactions(_userId);
-    
-    _isLoading = false;
-    notifyListeners();
+    try {
+      _bankBalance = await _supabaseService.getBalance(_userId);
+      _transactions = await _supabaseService.getTransactions(_userId);
+    } catch (e, stack) {
+      _transactions = [];
+      _errorMessage = 'Failed to load history. Please try again.';
+      // ignore: avoid_print
+      print('Error loading user data: $e');
+      // ignore: avoid_print
+      print(stack);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> reload() async {
+    await _loadData();
   }
 
   Future<bool> makePayment(double amount, String receiverName) async {

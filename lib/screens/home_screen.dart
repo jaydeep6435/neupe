@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +8,10 @@ import '../widgets/action_icon.dart';
 import '../widgets/section_header.dart';
 import 'transfer/contact_selection_screen.dart';
 import '../providers/user_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/supabase_service.dart';
 import 'qr_scanner_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -22,7 +26,7 @@ class HomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildMoneyTransferSection(context),
-            _buildUPIIdSection(),
+            _buildUPIIdSection(context),
             const SizedBox(height: 10),
             _buildRechargeSection(),
             const SizedBox(height: 10),
@@ -42,13 +46,23 @@ class HomeScreen extends StatelessWidget {
       elevation: 0,
       leading: Padding(
         padding: const EdgeInsets.all(8.0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+        child: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileScreen(),
+              ),
+            );
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: const Icon(Icons.person, color: AppColors.primary),
           ),
-          child: const Icon(Icons.person, color: AppColors.primary),
         ),
       ),
       title: Column(
@@ -145,25 +159,71 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUPIIdSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFe8f0fe),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade100),
+  Widget _buildUPIIdSection(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final userId = auth.userId;
+
+    if (userId == null) {
+      return const SizedBox.shrink();
+    }
+
+    final supabaseService = SupabaseService();
+
+    return FutureBuilder<UserProfile>(
+      future: supabaseService.getUserProfile(
+        userId,
+        loginMobile: auth.mobile,
       ),
-      child: Row(
-        children: [
-          const Text(
-            'UPI ID: 9876543210@ybl',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      builder: (context, snapshot) {
+        String label;
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          label = 'Fetching UPI ID...';
+        } else if (snapshot.hasError || !snapshot.hasData) {
+          label = 'UPI ID not available';
+        } else {
+          final profile = snapshot.data!;
+          label = 'UPI ID: ${profile.upiId}';
+        }
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFe8f0fe),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.shade100),
           ),
-          const Spacer(),
-          const Icon(Icons.copy, size: 16, color: Colors.grey),
-        ],
-      ),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (snapshot.hasData && snapshot.data!.upiId.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    final upi = snapshot.data!.upiId;
+                    Clipboard.setData(ClipboardData(text: upi));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('UPI ID copied to clipboard')),
+                    );
+                  },
+                  child: const Icon(Icons.copy, size: 16, color: Colors.grey),
+                )
+              else
+                const Icon(Icons.copy, size: 16, color: Colors.grey),
+            ],
+          ),
+        );
+      },
     );
   }
 

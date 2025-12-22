@@ -5,7 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/main_screen.dart';
 import 'utils/colors.dart';
 import 'providers/user_provider.dart';
+import 'providers/auth_provider.dart';
 import 'utils/constants.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +20,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: const PhonePeApp(),
     ),
@@ -30,6 +32,7 @@ class PhonePeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context);
     return MaterialApp(
       title: 'PhonePe Clone',
       debugShowCheckedModeBanner: false,
@@ -42,7 +45,18 @@ class PhonePeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
         useMaterial3: true,
       ),
-      home: const MainScreen(),
+      home: !auth.isInitialized
+          ? const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          : auth.isLoggedIn
+              ? ChangeNotifierProvider(
+                  create: (_) => UserProvider(auth.userId!),
+                  child: const MainScreen(),
+                )
+              : const LoginScreen(),
     );
   }
 }
