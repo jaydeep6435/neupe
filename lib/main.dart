@@ -45,6 +45,16 @@ class PhonePeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
         useMaterial3: true,
       ),
+      builder: (context, child) {
+        final widgetChild = child ?? const SizedBox.shrink();
+        if (auth.isLoggedIn && auth.userId != null) {
+          return ChangeNotifierProvider(
+            create: (_) => UserProvider(auth.userId!),
+            child: widgetChild,
+          );
+        }
+        return widgetChild;
+      },
       home: !auth.isInitialized
           ? const Scaffold(
               body: Center(
@@ -52,10 +62,7 @@ class PhonePeApp extends StatelessWidget {
               ),
             )
           : auth.isLoggedIn
-              ? ChangeNotifierProvider(
-                  create: (_) => UserProvider(auth.userId!),
-                  child: const MainScreen(),
-                )
+              ? const MainScreen()
               : const LoginScreen(),
     );
   }

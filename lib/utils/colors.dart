@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF5f259f); // PhonePe Purple
+  static const Color primary = Color.fromARGB(255, 135, 102, 228); // PhonePe Purple
   static const Color secondary = Color(0xFF00baf2); // PhonePe Blue (sometimes used)
   static const Color background = Color(0xFFf0f0f0);
   static const Color white = Colors.white;

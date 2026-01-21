@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../models/transaction_model.dart';
 import '../services/supabase_service.dart';
@@ -12,12 +14,14 @@ class UserProvider with ChangeNotifier {
   List<TransactionModel> _transactions = [];
   bool _isLoading = true;
   String? _errorMessage;
+  String? _upiPinHash;
 
   double get walletBalance => _walletBalance;
   double get bankBalance => _bankBalance;
   List<TransactionModel> get transactions => List.unmodifiable(_transactions);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get hasUpiPin => _upiPinHash != null && _upiPinHash!.isNotEmpty;
 
   UserProvider(this._userId) {
     _loadData();
@@ -31,6 +35,7 @@ class UserProvider with ChangeNotifier {
     try {
       _bankBalance = await _supabaseService.getBalance(_userId);
       _transactions = await _supabaseService.getTransactions(_userId);
+      _upiPinHash = await _supabaseService.getUpiPinHash(_userId);
     } catch (e, stack) {
       _transactions = [];
       _errorMessage = 'Failed to load history. Please try again.';
@@ -46,6 +51,28 @@ class UserProvider with ChangeNotifier {
 
   Future<void> reload() async {
     await _loadData();
+  }
+
+  String _hashUpiPin(String pin) {
+    // Salt with userId so identical PINs across users don't share hashes.
+    final bytes = utf8.encode('$_userId:$pin');
+    return sha256.convert(bytes).toString();
+  }
+
+  Future<void> setUpiPin(String pin) async {
+    final hash = _hashUpiPin(pin);
+    await _supabaseService.setUpiPinHash(_userId, hash);
+    _upiPinHash = hash;
+    notifyListeners();
+  }
+
+  Future<bool> verifyUpiPin(String pin) async {
+    // Ensure we have the latest value (covers the case where user set PIN
+    // from another screen and came back without restarting).
+    _upiPinHash ??= await _supabaseService.getUpiPinHash(_userId);
+    if (!hasUpiPin) return false;
+    final hash = _hashUpiPin(pin);
+    return hash == _upiPinHash;
   }
 
   Future<bool> makePayment(double amount, String receiverName) async {

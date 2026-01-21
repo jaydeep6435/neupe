@@ -3,10 +3,17 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter/services.dart';
 import '../../utils/colors.dart';
-import 'amount_entry_screen.dart';
+import '../../utils/page_transitions.dart';
+import '../../models/transaction_model.dart';
+import 'transaction_chat_screen.dart';
 
 class ContactSelectionScreen extends StatefulWidget {
-  const ContactSelectionScreen({super.key});
+  final List<TransactionModel>? transactions;
+  
+  const ContactSelectionScreen({
+    this.transactions,
+    super.key,
+  });
 
   @override
   State<ContactSelectionScreen> createState() => _ContactSelectionScreenState();
@@ -64,7 +71,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
             _filtered = lite;
             _loading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loaded ${lite.length} contacts (lite).')));
           return;
         }
 
@@ -107,7 +113,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
             _filtered = parsed;
             _loading = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loaded ${parsed.length} contacts.')));
           return;
         }
       }
@@ -118,7 +123,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
         _filtered = contacts;
         _loading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loaded ${contacts.length} contacts.')));
       // store a brief preview for debug
       if (contacts.isNotEmpty) {
         _lastDebug = 'First: ${contacts.first.displayName} / phones:${contacts.first.phones.length}';
@@ -126,7 +130,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
     } catch (e) {
       setState(() => _loading = false);
       _lastDebug = e.toString();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading contacts: ${e.toString()}')));
     }
   }
 
@@ -168,9 +171,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
           _loading = false;
           _lastDebug = 'Native returned 0 valid contacts from ${list.length} items';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No valid contacts found.')),
-        );
         return;
       }
 
@@ -184,9 +184,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
         final preview = parsed.take(5).map((c) => c.displayName).join(', ');
         _lastDebug = 'Native: ${parsed.length} contacts – first: $preview';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Loaded ${parsed.length} contacts.')),
-      );
     } catch (e, stack) {
       // ignore: avoid_print
       print('Native query error: $e\n$stack');
@@ -194,9 +191,6 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
         _loading = false;
         _lastDebug = 'Native query error: ${e.toString()}';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Native query failed: ${e.toString()}')),
-      );
     }
   }
 
@@ -216,29 +210,58 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
     });
   }
 
+  Color _avatarColorFor(String seed) {
+    // Deterministic blend between primary and secondary for variety.
+    final hash = seed.codeUnits.fold<int>(0, (a, b) => a + b);
+    final t = ((hash % 100) / 100.0).clamp(0.0, 1.0);
+    return Color.lerp(AppColors.primary, AppColors.secondary, t) ?? AppColors.primary;
+  }
+
   Widget _buildContactTile(Contact c) {
     final name = c.displayName;
     final phone = c.phones.isNotEmpty ? c.phones.first.number.replaceAll(RegExp(r'\s+|-'), '') : '';
+    final heroTag = 'contactHero:${(phone.isNotEmpty ? phone : name).trim().toLowerCase()}';
 
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppColors.primary,
-        child: Text(
-          name.isNotEmpty ? name[0] : '?',
-          style: const TextStyle(color: Colors.white),
+      leading: Hero(
+        tag: heroTag,
+        child: Material(
+          type: MaterialType.transparency,
+          child: CircleAvatar(
+            backgroundColor: _avatarColorFor(name.isNotEmpty ? name : phone),
+            child: Text(
+              name.isNotEmpty ? name[0] : '?',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
         ),
       ),
-      title: Text(name),
-      subtitle: Text(phone),
+      title: Text(
+        name,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        phone,
+        style: TextStyle(color: Colors.white.withOpacity(0.70)),
+      ),
       onTap: phone.isNotEmpty
           ? () {
+            // Filter transactions with this contact (best-effort by name)
+              final contactTransactions = widget.transactions != null
+                  ? widget.transactions!
+                .where((txn) => txn.title.toLowerCase().contains(name.toLowerCase()))
+                      .toList()
+                  : <TransactionModel>[];
+
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => AmountEntryScreen(
-                    receiverName: name,
-                    receiverPhone: phone,
+                smoothFadeScaleRoute(
+                  (context) => TransactionChatScreen(
+                    contactName: name,
+                    contactPhone: phone,
+                    transactions: contactTransactions,
                   ),
+                  contentFadeInStart: 0.42,
                 ),
               );
             }
@@ -249,54 +272,87 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('Select Contact'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: TextField(
               onChanged: _onSearch,
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: 'Search contacts or numbers',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.70)),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Colors.white.withOpacity(0.08),
                 contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.55)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppColors.primary.withOpacity(0.55)),
+                ),
               ),
             ),
           ),
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : _useSample
               ? ListView.separated(
                   itemCount: _sampleContacts.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white.withOpacity(0.08)),
                   itemBuilder: (context, index) {
                     final c = _sampleContacts[index];
                     return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: AppColors.primary,
-                        child: Text(
-                          c['name']![0],
-                          style: const TextStyle(color: Colors.white),
+                      leading: Hero(
+                        tag: 'contactHero:${c['phone']!.trim().toLowerCase()}',
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: CircleAvatar(
+                            backgroundColor: _avatarColorFor(c['name']!),
+                            child: Text(
+                              c['name']![0],
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
                         ),
                       ),
-                      title: Text(c['name']!),
-                      subtitle: Text(c['phone']!),
+                      title: Text(c['name']!, style: const TextStyle(color: Colors.white)),
+                      subtitle: Text(c['phone']!, style: TextStyle(color: Colors.white.withOpacity(0.70))),
                       onTap: () {
+                        // Filter transactions with this contact's phone
+                        final phone = c['phone']!;
+                        final contactTransactions = widget.transactions != null
+                            ? widget.transactions!
+                            .where((txn) => txn.title.toLowerCase().contains(c['name']!.toLowerCase()))
+                                .toList()
+                            : <TransactionModel>[];
+
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => AmountEntryScreen(
-                              receiverName: c['name']!,
-                              receiverPhone: c['phone']!,
+                          smoothFadeScaleRoute(
+                            (context) => TransactionChatScreen(
+                              contactName: c['name']!,
+                              contactPhone: phone,
+                              transactions: contactTransactions,
                             ),
+                            contentFadeInStart: 0.42,
                           ),
                         );
                       },
@@ -310,7 +366,7 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
                         children: [
                           const Text(
                             'No contacts found',
-                            style: TextStyle(fontSize: 16),
+                            style: TextStyle(fontSize: 16, color: Colors.white),
                           ),
                           const SizedBox(height: 8),
                           const Padding(
@@ -318,6 +374,7 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
                             child: Text(
                               'Make sure this app has Contacts permission and that your device has at least one contact. You can also add contacts to the emulator or use the sample list for testing.',
                               textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white70),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -328,10 +385,10 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
                                 onPressed: _initContacts,
                                 child: const Text('Retry'),
                               ),
-                                  ElevatedButton(
-                                    onPressed: _tryNativeQuery,
-                                    child: const Text('Try native query'),
-                                  ),
+                              ElevatedButton(
+                                onPressed: _tryNativeQuery,
+                                child: const Text('Try native query'),
+                              ),
                               OutlinedButton(
                                 onPressed: () async {
                                   await openAppSettings();
@@ -348,22 +405,22 @@ class _ContactSelectionScreenState extends State<ContactSelectionScreen> {
                               ),
                             ],
                           ),
-                            const SizedBox(height: 12),
-                            if (_lastDebug != null)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8),
-                                child: Text(
-                                  'Debug: $_lastDebug\nContacts found: ${_contacts.length}',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                ),
+                          const SizedBox(height: 12),
+                          if (_lastDebug != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8),
+                              child: Text(
+                                'Debug: $_lastDebug\nContacts found: ${_contacts.length}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.55)),
                               ),
+                            ),
                         ],
                       ),
                     )
                   : ListView.separated(
                       itemCount: _filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, __) => Divider(height: 1, color: Colors.white.withOpacity(0.08)),
                       itemBuilder: (context, index) {
                         final c = _filtered[index];
                         return _buildContactTile(c);

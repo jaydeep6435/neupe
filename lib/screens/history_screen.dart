@@ -13,14 +13,23 @@ class HistoryScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.primary, AppColors.secondary],
+            ),
+          ),
+        ),
         title: const Text(
           'History',
           style: TextStyle(color: Colors.white),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.filter_list, color: Colors.white),
-            onPressed: () {},
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: () => context.read<UserProvider>().reload(),
           ),
         ],
       ),
@@ -132,13 +141,85 @@ class HistoryScreen extends StatelessWidget {
 
           final transactions = userProvider.transactions;
           if (transactions.isEmpty) {
-            return const Center(child: Text('No transactions yet'));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.primary.withOpacity(0.08)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.receipt_long, color: AppColors.primary),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'No transactions yet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Your payments and receipts will show here.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.black.withOpacity(0.55),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: 160,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: userProvider.reload,
+                          child: const Text(
+                            'REFRESH',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
           }
-          return ListView.builder(
-            itemCount: transactions.length,
-            itemBuilder: (context, index) {
-              return _buildTransactionItem(transactions[index]);
-            },
+
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: userProvider.reload,
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 10, bottom: 18),
+              itemCount: transactions.length,
+              itemBuilder: (context, index) {
+                return _buildTransactionItem(transactions[index]);
+              },
+            ),
           );
         },
       ),
@@ -152,13 +233,7 @@ class HistoryScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 8),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: AppColors.primary.withOpacity(0.08)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -167,7 +242,9 @@ class HistoryScreen extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: isCredit ? AppColors.green.withValues(alpha: 26) : Colors.red.withValues(alpha: 26),
+              color: isCredit
+                  ? AppColors.green.withOpacity(0.12)
+                  : Colors.red.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -182,12 +259,12 @@ class HistoryScreen extends StatelessWidget {
               children: [
                 Text(
                   transaction.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   transaction.formattedDate,
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  style: TextStyle(color: Colors.black.withOpacity(0.55), fontSize: 12),
                 ),
               ],
             ),
@@ -197,12 +274,16 @@ class HistoryScreen extends StatelessWidget {
             children: [
               Text(
                 '₹ ${transaction.amount}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: isCredit ? AppColors.green : AppColors.black,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 transaction.subtitle,
-                style: const TextStyle(color: Colors.grey, fontSize: 10),
+                style: TextStyle(color: Colors.black.withOpacity(0.45), fontSize: 10),
               ),
             ],
           ),

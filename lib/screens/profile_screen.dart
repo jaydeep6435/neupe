@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
 import '../services/supabase_service.dart';
-import '../utils/colors.dart';
+import '../utils/page_transitions.dart';
+import 'profile/set_upi_pin_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,6 +18,10 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final SupabaseService _supabaseService;
   Future<UserProfile>? _profileFuture;
+
+  static const _bgTop = Color(0xFF050816);
+  static const _card = Color(0xFF13162B);
+  static const _card2 = Color(0xFF1E2142);
 
   @override
   void initState() {
@@ -52,74 +57,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF050816),
+      backgroundColor: _bgTop,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF050816),
+        backgroundColor: _bgTop,
+        foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         title: const Text(
           'Profile & Settings',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
-      body: FutureBuilder<UserProfile>(
-        future: _profileFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(-0.7, -0.8),
+            radius: 1.1,
+            colors: [Color(0x1A7C4DFF), Color(0x00050816)],
+          ),
+        ),
+        child: FutureBuilder<UserProfile>(
+          future: _profileFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (snapshot.hasError && !snapshot.hasData) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Something went wrong',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+            if (snapshot.hasError && !snapshot.hasData) {
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Something went wrong',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _loadProfile,
-                    child: const Text('Retry'),
-                  ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: _loadProfile,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            if (!snapshot.hasData) {
+              return const Center(
+                child: Text(
+                  'No profile data available',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              );
+            }
+
+            final profile = snapshot.data!;
+            final upiUrl =
+                'upi://pay?pa=${Uri.encodeComponent(profile.upiId)}&pn=${Uri.encodeComponent(profile.name)}';
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHeaderSection(profile, upiUrl),
+                  const SizedBox(height: 16),
+                  _buildSecurityCard(),
+                  const SizedBox(height: 16),
+                  _buildSettingsList(),
+                  const SizedBox(height: 24),
+                  _buildLogoutButton(),
                 ],
               ),
             );
-          }
-
-          if (!snapshot.hasData) {
-            return const Center(
-              child: Text(
-                'No profile data available',
-                style: TextStyle(color: Colors.white70),
-              ),
-            );
-          }
-
-          final profile = snapshot.data!;
-          final upiUrl =
-              'upi://pay?pa=${Uri.encodeComponent(profile.upiId)}&pn=${Uri.encodeComponent(profile.name)}';
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeaderSection(profile, upiUrl),
-                const SizedBox(height: 16),
-                _buildManagePaymentsCard(),
-                const SizedBox(height: 16),
-                _buildSettingsList(),
-                const SizedBox(height: 24),
-                _buildLogoutButton(),
-              ],
-            ),
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -127,10 +148,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildHeaderSection(UserProfile profile, String upiUrl) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-        gradient: LinearGradient(
-          colors: [Color(0xFF673AB7), Color(0xFF512DA8)],
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(18)),
+        color: _card,
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF13162B), Color(0xFF0B0F22)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -142,11 +165,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               CircleAvatar(
                 radius: 26,
-                backgroundColor: Colors.white.withOpacity(0.15),
+                backgroundColor: Colors.white.withOpacity(0.10),
                 child: Text(
-                  profile.name.isNotEmpty
-                      ? profile.name[0].toUpperCase()
-                      : 'U',
+                  profile.name.isNotEmpty ? profile.name[0].toUpperCase() : 'U',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -183,110 +204,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           Container(
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _card2,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
             ),
-            padding: const EdgeInsets.all(12),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Your UPI QR',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(16),
-                              ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your QR',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
                             ),
-                            builder: (ctx) {
-                              return Padding
-                              (
-                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Your UPI details',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            profile.upiId,
-                                            style: const TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.copy, size: 18),
-                                          onPressed: () {
-                                            Clipboard.setData(
-                                              ClipboardData(text: profile.upiId),
-                                            );
-                                            Navigator.of(ctx).pop();
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('UPI ID copied to clipboard'),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        },
-                        child: const Text(
-                          'View UPI details',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
                           ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Scan to pay instantly',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: const Color(0xFF0B0F22),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(18),
+                            ),
+                          ),
+                          builder: (ctx) {
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                16,
+                                16,
+                                24,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    height: 4,
+                                    width: 44,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.18),
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  const Text(
+                                    'Your QR',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: QrImageView(
+                                      data: upiUrl,
+                                      size: 260,
+                                      backgroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      child: const Text(
+                        'EXPAND',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: QrImageView(
-                    data: upiUrl,
-                    size: 150,
-                    backgroundColor: Colors.white,
+                const SizedBox(height: 14),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: QrImageView(
+                      data: upiUrl,
+                      size: 200,
+                      backgroundColor: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -297,53 +328,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildManagePaymentsCard() {
+  Widget _buildSecurityCard() {
+    final hasUpiPin =
+        Provider.of<UserProvider?>(context, listen: true)?.hasUpiPin ?? false;
+
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF13162B),
-      ),
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: _card,
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E2142),
-              borderRadius: BorderRadius.circular(12),
+              color: _card2,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
             ),
-            child: const Icon(
-              Icons.account_balance_wallet_outlined,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.security, color: Colors.white),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Manage Payments',
+                const Text(
+                  'Security',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Bank accounts, UPI IDs & more',
+                  hasUpiPin ? 'UPI PIN is set' : 'UPI PIN not set',
                   style: TextStyle(
-                    color: Colors.white60,
+                    color: hasUpiPin ? Colors.white70 : Colors.white60,
                     fontSize: 12,
                   ),
                 ),
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right,
-            color: Colors.white54,
+          TextButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                smoothFadeSlideRoute(
+                  (context) => const SetUpiPinScreen(),
+                ),
+              );
+            },
+            child: Text(
+              hasUpiPin ? 'CHANGE' : 'SET',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -351,7 +397,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildSettingsList() {
+    final hasUpiPin =
+        Provider.of<UserProvider?>(context, listen: true)?.hasUpiPin ?? false;
     final items = [
+      _SettingsItem(
+        icon: Icons.password,
+        title: hasUpiPin ? 'Change UPI PIN' : 'Set UPI PIN',
+        subtitle: hasUpiPin
+            ? 'Update your UPI PIN'
+            : 'Create a UPI PIN for payments',
+        onTap: () {
+          Navigator.push(
+            context,
+            smoothFadeSlideRoute(
+              (context) => const SetUpiPinScreen(),
+            ),
+          );
+        },
+      ),
       const _SettingsItem(
         icon: Icons.tune,
         title: 'Preferences',
@@ -381,8 +444,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0xFF13162B),
+        borderRadius: BorderRadius.circular(18),
+        color: _card,
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       child: Column(
         children: [
@@ -408,14 +472,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E2142),
+          color: _card2,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
         ),
-        child: Icon(
-          item.icon,
-          color: Colors.white,
-          size: 22,
-        ),
+        child: Icon(item.icon, color: Colors.white, size: 22),
       ),
       title: Text(
         item.title,
@@ -427,40 +488,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       subtitle: Text(
         item.subtitle,
-        style: const TextStyle(
-          color: Colors.white60,
-          fontSize: 12,
-        ),
+        style: const TextStyle(color: Colors.white60, fontSize: 12),
       ),
-      trailing: const Icon(
-        Icons.chevron_right,
-        color: Colors.white54,
-      ),
-      onTap: () {},
+      trailing: item.onTap == null
+          ? null
+          : const Icon(Icons.chevron_right, color: Colors.white54),
+      onTap: item.onTap,
     );
   }
 
   Widget _buildLogoutButton() {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF1F1A3D),
-        foregroundColor: Colors.redAccent,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      onPressed: () {
+    return InkWell(
+      onTap: () {
         final auth = Provider.of<AuthProvider>(context, listen: false);
         auth.logout();
         Navigator.of(context).popUntil((route) => route.isFirst);
       },
-      icon: const Icon(Icons.logout),
-      label: const Text(
-        'Logout',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withOpacity(0.04),
+          border: Border.all(color: Colors.redAccent.withOpacity(0.30)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 40,
+              width: 40,
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.28)),
+              ),
+              child: const Icon(Icons.logout, color: Colors.redAccent),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.redAccent.withOpacity(0.9)),
+          ],
         ),
       ),
     );
@@ -471,10 +547,12 @@ class _SettingsItem {
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   const _SettingsItem({
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 }

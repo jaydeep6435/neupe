@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
+import 'package:postgrest/postgrest.dart';
 import '../models/transaction_model.dart';
 
 class UserProfile {
@@ -15,6 +17,80 @@ class UserProfile {
 
 class SupabaseService {
   final SupabaseClient _client = Supabase.instance.client;
+
+  bool _isDnsOrNetworkError(Object e) {
+    if (e is SocketException) return true;
+    final message = e.toString();
+    return message.contains('Failed host lookup') ||
+        message.contains('No address associated with hostname');
+  }
+
+  Exception _networkException(Object e) {
+    return Exception(
+      'Network/DNS error: unable to reach Supabase. '
+      'Check internet, disable Private DNS/VPN/ad-blocker, then retry.\n$e',
+    );
+  }
+
+  String _formatSupabaseError(Object e) {
+    if (e is PostgrestException) {
+      final details = (e.details ?? '').toString();
+      final hint = (e.hint ?? '').toString();
+      final code = (e.code ?? '').toString();
+      final parts = <String>[
+        e.message,
+        if (details.isNotEmpty) details,
+        if (hint.isNotEmpty) 'hint: $hint',
+        if (code.isNotEmpty) 'code: $code',
+      ];
+      return parts.join(' | ');
+    }
+    return e.toString();
+  }
+
+  Future<String?> getUpiPinHash(String userId) async {
+    try {
+      final data = await _client
+          .from('profiles')
+          .select('upi_pin_hash')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (data == null) return null;
+      final raw = data['upi_pin_hash'];
+      return raw == null ? null : raw.toString();
+    } catch (e, stack) {
+      if (_isDnsOrNetworkError(e)) {
+        // Surface connectivity issues so UI can show a proper message.
+        throw _networkException(e);
+      }
+      // If the column/table isn't present yet or any other error occurs,
+      // treat it as "no PIN set" so the UI can guide the user.
+      // ignore: avoid_print
+      print('Error reading UPI PIN hash: $e');
+      // ignore: avoid_print
+      print(stack);
+      return null;
+    }
+  }
+
+  Future<void> setUpiPinHash(String userId, String upiPinHash) async {
+    try {
+      await _client.from('profiles').upsert({
+        'id': userId,
+        'upi_pin_hash': upiPinHash,
+      });
+    } catch (e, stack) {
+      // ignore: avoid_print
+      print('Error saving UPI PIN hash: $e');
+      // ignore: avoid_print
+      print(stack);
+      if (_isDnsOrNetworkError(e)) {
+        throw _networkException(e);
+      }
+      throw Exception(_formatSupabaseError(e));
+    }
+  }
 
   Future<double> getBalance(String userId) async {
     try {
